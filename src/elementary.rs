@@ -8,11 +8,10 @@ fn rem_euclid_2(x: f64) -> f64 {
         1.0
     }
 }
-
 macro_rules! impl_log {
     ($(#[$meta:meta])* $f:ident, $f_real:expr) => {
         $(#[$meta])*
-        #[must_use]
+        #[allow(dead_code)]
         fn $f(self) -> Self {
             // See the comment in atanh_impl.
             const DOM: Interval = const_interval!(0.0, f64::INFINITY);
