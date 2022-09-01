@@ -1,9 +1,15 @@
 [package]
 name = "inari_wasm"
 version = "0.1.0"
+authors = ["Masashi Mizuno", "Nejc Jezersek"]
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "Striped down version of Inari library (a Rust implementation of interval arithmetic) compatible with web assembly"
+license = "MIT"
+homepage = "https://github.com/njezersek/inari-wasm"
+repository = "https://github.com/njezersek/inari-wasm"
+keywords = ["arithmetic", "interval", "math", "numerics"]
+categories = ["mathematics", "science"]
+readme = "README.md"
 
 [dependencies]
 forward_ref = "1.0.0"
