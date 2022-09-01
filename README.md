@@ -1,14 +1,14 @@
 # 🦊 inari wasm 🕸
 
-**inari_wasm** is a striped down version of original [inari](https://github.com/unageek/inari) library which is a Rust implementation of [interval arithmetic](https://en.wikipedia.org/wiki/Interval_arithmetic).
+**inari_wasm** is a stripped-down version of the original [inari](https://github.com/unageek/inari) library which is a Rust implementation of [interval arithmetic](https://en.wikipedia.org/wiki/Interval_arithmetic).
 
-Original library uses [`gmp-mpfr-sys`](https://crates.io/crates/gmp-mpfr-sys) that allows it to specify different floating point rounding policies for calculating lower and upper bounds of an interval. Unfortunaly web assembly does not suport instructions necessary to change the rounding policy (https://github.com/WebAssembly/design/issues/1384). To use this library in web assembly I had to remove all functions from `gmp` and replace them with their normal counter parts.
+The original library uses [`gmp-mpfr-sys`](https://crates.io/crates/gmp-mpfr-sys) which allows it to specify different floating point rounding policies for calculating the lower and upper bounds of an interval. Unfortunately, web assembly does not support the instructions necessary to change the rounding policy  ([WebAssembly/design#1384](https://github.com/WebAssembly/design/issues/1384)). To use this library in web assembly I had to remove all functions from `gmp` and replace them with their normal counterparts.
 
-Original library uses SIMD instructions. These are supported in web assembly but I don't know how to use them so they were also replaced.
+The original library uses SIMD instructions. These are supported in web assembly but I don't know how to use them so they were also replaced.
 
-I modified the library by copying the functions one by one to a new project and modifing them. I included the `Interval` struct and all of its implementations. For now I haven't included `DecInterval`.
+I modified the library by copying the functions one by one to a new project and modifying them. I included the `Interval` struct and all of its implementations. For now, I haven't included `DecInterval`.
 
-> This version is less accurate and slower than original if you don't need to compile for wasm, please use the [original library](https://github.com/unageek/inari). 
+> This version is less accurate and slower than the original if you don't need to compile for wasm, please use the [original library](https://github.com/unageek/inari). 
 
 ## Example
 ```rust
