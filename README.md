@@ -1,50 +1,24 @@
-# 🦊 inari
+# 🦊 inari wasm 🕸
 
-[![crates.io](https://img.shields.io/crates/v/inari.svg)](https://crates.io/crates/inari)
-[![docs](https://img.shields.io/docsrs/inari)](https://docs.rs/inari)
-[![build](https://img.shields.io/github/workflow/status/unageek/inari/build/main)](https://github.com/unageek/inari/actions?query=branch%3Amaster+workflow%3Abuild)
-[![coverage](https://img.shields.io/coveralls/github/unageek/inari/main)](https://coveralls.io/github/unageek/inari?branch=main)
-[![rustc 1.61+](https://img.shields.io/badge/rustc-1.61%2B-lightgrey)](https://blog.rust-lang.org/2022/05/19/Rust-1.61.0.html)
+**inari_wasm** is a striped down version of original [inari](https://github.com/unageek/inari) library which is a Rust implementation of [interval arithmetic](https://en.wikipedia.org/wiki/Interval_arithmetic).
 
-**inari** is a Rust implementation of [interval arithmetic](https://en.wikipedia.org/wiki/Interval_arithmetic).
+Original library uses [`gmp-mpfr-sys`](https://crates.io/crates/gmp-mpfr-sys) that allows it to specify different floating point rounding policies for calculating lower and upper bounds of an interval. Unfortunaly web assembly does not suport instructions necessary to change the rounding policy (https://github.com/WebAssembly/design/issues/1384). To use this library in web assembly I had to remove all functions from `gmp` and replace them with their normal counter parts.
 
-It [conforms](https://docs.rs/inari/latest/inari/_docs/conformance/index.html) to [IEEE Std 1788.1-2017](https://doi.org/10.1109/IEEESTD.2018.8277144). It also implements a subset of [IEEE Std 1788-2015](https://doi.org/10.1109/IEEESTD.2015.7140721).
+Original library uses SIMD instructions. These are supported in web assembly but I don't know how to use them so they were also replaced.
 
-## Supported Platforms
+I modified the library by copying the functions one by one to a new project and modifing them. I included the `Interval` struct and all of its implementations. For now I haven't included `DecInterval`.
 
-The following CPUs are supported:
+> This version is less accurate and slower than original if you don't need to compile for wasm, please use the [original library](https://github.com/unageek/inari). 
 
-- **x86-64**
-
-  Haswell-based and newer processors are supported.
-
-  You need to specify the target CPU when building a crate that depends on inari. One way to do that is using a [configuration file](https://doc.rust-lang.org/cargo/reference/config.html) in your project (see [example](https://github.com/unageek/graphest/blob/main/.cargo/config.toml); you may want to change `native` to `haswell` for the best compatibility if you are going to distribute binaries).
-
-- **AArch64 (ARM64)**
-
-  Should be usable, but is not tested continuously.
-
-When using the Cargo feature `gmp` (see below), target platforms are limited to the ones that are supported by the [`gmp-mpfr-sys`](https://crates.io/crates/gmp-mpfr-sys) crate. For example, MSVC is not supported.
-
-## Cargo Features
-
-- `gmp` (enabled by default) - Enables [operations](https://docs.rs/inari/latest/inari/_docs/conformance/) that depend on GMP and MPFR. You can opt out the feature to reduce dependencies. Even in that case, you still have access to all operations required by certain kind of tasks, such as making fast robust predicates for computational geometry.
-
-## [Changelog](CHANGELOG.md)
-
-## Building the Documentation Locally
-
-```bash
-RUSTDOCFLAGS="--cfg docsrs --html-in-header /path/to/inari/src/_docs/header.html" cargo doc --open
+## Example
+```rust
+let x = const_interval!(0.0, 2.0);
+let y = x.sin() + const_interval!(1.0);
+println!("{}", y); // [1, 2]
 ```
-
-The absolute path to [`header.html`](src/_docs/header.html) must be specified.
-
-## Related Project
-
-- [Graphest](https://github.com/unageek/graphest) - A faithful graphing calculator
 
 ## References
 
+- Inari - A Rust implementation of interval arithmetic (IEEE 1788). https://github.com/unageek/inari
 - IEEE Std 1788-2015 - IEEE Standard for Interval Arithmetic. https://doi.org/10.1109/IEEESTD.2015.7140721
 - IEEE Std 1788.1-2017 - IEEE Standard for Interval Arithmetic (Simplified). https://doi.org/10.1109/IEEESTD.2018.8277144

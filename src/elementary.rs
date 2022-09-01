@@ -1,92 +1,5 @@
 use crate::{classify::*, const_interval, interval::*};
-use gmp_mpfr_sys::mpfr;
-use rug::Float;
-
-macro_rules! mpfr_fn {
-    ($mpfr_f:ident, $f_rd:ident, $f_ru:ident) => {
-        fn $f_rd(x: f64) -> f64 {
-            mpfr_fn!($mpfr_f(x, RNDD))
-        }
-
-        fn $f_ru(x: f64) -> f64 {
-            mpfr_fn!($mpfr_f(x, RNDU))
-        }
-    };
-
-    ($mpfr_f:ident($x:ident, $rnd:ident)) => {{
-        let mut x = Float::with_val(f64::MANTISSA_DIGITS, $x);
-        let rnd = mpfr::rnd_t::$rnd;
-        unsafe {
-            mpfr::$mpfr_f(x.as_raw_mut(), x.as_raw(), rnd);
-            mpfr::get_d(x.as_raw(), rnd)
-        }
-    }};
-}
-
-macro_rules! mpfr_fn2 {
-    ($mpfr_f:ident, $f_rd:ident, $f_ru:ident) => {
-        fn $f_rd(x: f64, y: f64) -> f64 {
-            mpfr_fn2!($mpfr_f(x, y, RNDD))
-        }
-
-        fn $f_ru(x: f64, y: f64) -> f64 {
-            mpfr_fn2!($mpfr_f(x, y, RNDU))
-        }
-    };
-
-    ($mpfr_f:ident($x:ident, $y:ident, $rnd:ident)) => {{
-        let mut x = Float::with_val(f64::MANTISSA_DIGITS, $x);
-        let y = Float::with_val(f64::MANTISSA_DIGITS, $y);
-        let rnd = mpfr::rnd_t::$rnd;
-        unsafe {
-            mpfr::$mpfr_f(x.as_raw_mut(), x.as_raw(), y.as_raw(), rnd);
-            mpfr::get_d(x.as_raw(), rnd)
-        }
-    }};
-}
-
-macro_rules! mpfr_fn_si {
-    ($mpfr_f:ident, $f_rd:ident, $f_ru:ident) => {
-        fn $f_rd(x: f64, y: i32) -> f64 {
-            mpfr_fn_si!($mpfr_f(x, y, RNDD))
-        }
-
-        fn $f_ru(x: f64, y: i32) -> f64 {
-            mpfr_fn_si!($mpfr_f(x, y, RNDU))
-        }
-    };
-
-    ($mpfr_f:ident($x:ident, $y:ident, $rnd:ident)) => {{
-        let mut x = Float::with_val(f64::MANTISSA_DIGITS, $x);
-        let rnd = mpfr::rnd_t::$rnd;
-        unsafe {
-            mpfr::$mpfr_f(x.as_raw_mut(), x.as_raw(), $y.into(), rnd);
-            mpfr::get_d(x.as_raw(), rnd)
-        }
-    }};
-}
-
-mpfr_fn!(acos, acos_rd, acos_ru);
-mpfr_fn!(acosh, acosh_rd, acosh_ru);
-mpfr_fn!(asin, asin_rd, asin_ru);
-mpfr_fn!(asinh, asinh_rd, asinh_ru);
-mpfr_fn!(atan, atan_rd, atan_ru);
-mpfr_fn2!(atan2, atan2_rd, atan2_ru);
-mpfr_fn!(atanh, atanh_rd, atanh_ru);
-mpfr_fn!(cos, cos_rd, cos_ru);
-mpfr_fn!(cosh, cosh_rd, cosh_ru);
-mpfr_fn!(exp, exp_rd, exp_ru);
-mpfr_fn!(exp10, exp10_rd, exp10_ru);
-mpfr_fn!(exp2, exp2_rd, exp2_ru);
-mpfr_fn!(log, ln_rd, ln_ru);
-mpfr_fn!(log10, log10_rd, log10_ru);
-mpfr_fn!(log2, log2_rd, log2_ru);
-mpfr_fn2!(pow, pow_rd, pow_ru);
-mpfr_fn_si!(pow_si, pown_rd, pown_ru);
-mpfr_fn!(sin, sin_rd, sin_ru);
-mpfr_fn!(sinh, sinh_rd, sinh_ru);
-mpfr_fn!(tan, tan_rd, tan_ru);
-mpfr_fn!(tanh, tanh_rd, tanh_ru);
+use libm;
 
 fn rem_euclid_2(x: f64) -> f64 {
     if 2.0 * (x / 2.0).floor() == x {
@@ -97,38 +10,26 @@ fn rem_euclid_2(x: f64) -> f64 {
 }
 
 macro_rules! impl_log {
-    ($(#[$meta:meta])* $f:ident, $f_impl:ident, $f_rd:ident, $f_ru:ident) => {
+    ($(#[$meta:meta])* $f:ident, $f_real:expr) => {
         $(#[$meta])*
         #[must_use]
-        pub fn $f(self) -> Self {
-            self.$f_impl().0
-        }
-
-        #[allow(clippy::many_single_char_names)]
-        fn $f_impl(self) -> (Self, Decoration) {
+        fn $f(self) -> Self {
             // See the comment in atanh_impl.
             const DOM: Interval = const_interval!(0.0, f64::INFINITY);
             let x = self.intersection(DOM);
 
-            let a = x.inf_raw();
-            let b = x.sup_raw();
+            let (a, b) = (x.inf, x.sup);
             if x.is_empty() || b <= 0.0 {
-                return (Self::EMPTY, Decoration::Trv);
+                return Self::EMPTY;
             }
 
-            let y = Self::with_infsup_raw($f_rd(a), $f_ru(b));
-            let d = if self.interior(DOM) {
-                Decoration::Com
-            } else {
-                Decoration::Trv
-            };
-            (y, d)
+            Self::with_infsup_raw($f_real(a), $f_real(b))
         }
     };
 }
 
 macro_rules! impl_mono_inc {
-    ($(#[$meta:meta])* $f:ident, $f_rd:ident, $f_ru:ident) => {
+    ($(#[$meta:meta])* $f:ident, $f_real:expr) => {
         $(#[$meta])*
         #[must_use]
         pub fn $f(self) -> Self {
@@ -136,7 +37,7 @@ macro_rules! impl_mono_inc {
                 return self;
             }
 
-            Self::with_infsup_raw($f_rd(self.inf_raw()), $f_ru(self.sup_raw()))
+            Self::with_infsup_raw($f_real(self.inf), $f_real(self.sup))
         }
     };
 }
@@ -151,24 +52,14 @@ impl Interval {
     /// | $\[-1, 1\]$ | $\[0, π\]$ |
     #[must_use]
     pub fn acos(self) -> Self {
-        self.acos_impl().0
-    }
-
-    fn acos_impl(self) -> (Self, Decoration) {
         const DOM: Interval = const_interval!(-1.0, 1.0);
         let x = self.intersection(DOM);
 
         if x.is_empty() {
-            return (x, Decoration::Trv);
+            return x;
         }
 
-        let y = Self::with_infsup_raw(acos_rd(x.sup_raw()), acos_ru(x.inf_raw()));
-        let d = if self.subset(DOM) {
-            Decoration::Com
-        } else {
-            Decoration::Trv
-        };
-        (y, d)
+        Self::with_infsup_raw(f64::acos(x.sup), f64::acos(x.inf))
     }
 
     /// Returns the inverse hyperbolic cosine of `self`.
@@ -180,25 +71,16 @@ impl Interval {
     /// | $\[1, ∞)$ | $\[0, ∞)$ |
     #[must_use]
     pub fn acosh(self) -> Self {
-        self.acosh_impl().0
-    }
-
-    fn acosh_impl(self) -> (Self, Decoration) {
         const DOM: Interval = const_interval!(1.0, f64::INFINITY);
         let x = self.intersection(DOM);
 
         if x.is_empty() {
-            return (x, Decoration::Trv);
+            return x;
         }
 
-        let y = Self::with_infsup_raw(acosh_rd(x.inf_raw()), acosh_ru(x.sup_raw()));
-        let d = if self.subset(DOM) {
-            Decoration::Com
-        } else {
-            Decoration::Trv
-        };
-        (y, d)
+        Self::with_infsup_raw(f64::acosh(x.inf), f64::acosh(x.sup))
     }
+
 
     /// Returns the inverse sine of `self`.
     ///
@@ -209,24 +91,14 @@ impl Interval {
     /// | $\[-1, 1\]$ | $\[-π/2, π/2\]$ |
     #[must_use]
     pub fn asin(self) -> Self {
-        self.asin_impl().0
-    }
-
-    fn asin_impl(self) -> (Self, Decoration) {
         const DOM: Interval = const_interval!(-1.0, 1.0);
         let x = self.intersection(DOM);
 
         if x.is_empty() {
-            return (x, Decoration::Trv);
+            return x;
         }
 
-        let y = Self::with_infsup_raw(asin_rd(x.inf_raw()), asin_ru(x.sup_raw()));
-        let d = if self.subset(DOM) {
-            Decoration::Com
-        } else {
-            Decoration::Trv
-        };
-        (y, d)
+        Self::with_infsup_raw(f64::asin(x.inf), f64::asin(x.sup))
     }
 
     impl_mono_inc!(
@@ -238,8 +110,7 @@ impl Interval {
         /// | ------ | ----- |
         /// | $\R$   | $\R$  |
         asinh,
-        asinh_rd,
-        asinh_ru
+        f64::asinh
     );
     impl_mono_inc!(
         /// Returns the inverse tangent of `self`.
@@ -250,8 +121,7 @@ impl Interval {
         /// | ------ | ------------- |
         /// | $\R$   | $(-π/2, π/2)$ |
         atan,
-        atan_rd,
-        atan_ru
+		f64::atan
     );
 
     /// Returns the angle of the point $(\rhs, \self)$ measured counterclockwise from the positive
@@ -263,117 +133,68 @@ impl Interval {
     /// | --------------------- | ---------- |
     /// | $\R^2 ∖ \set{(0, 0)}$ | $(-π, π\]$ |
     #[must_use]
-    pub fn atan2(self, rhs: Self) -> Self {
-        self.atan2_impl(rhs).0
-    }
-
     #[allow(clippy::many_single_char_names)]
-    fn atan2_impl(self, rhs: Self) -> (Self, Decoration) {
+    pub fn atan2(self, rhs: Self) -> Self {
         let (x, y) = (rhs, self);
-        let a = x.inf_raw();
-        let b = x.sup_raw();
-        let c = y.inf_raw();
-        let d = y.sup_raw();
+        let a = x.inf;
+        let b = x.sup;
+        let c = y.inf;
+        let d = y.sup;
 
         use IntervalClass2::*;
         match x.classify2(y) {
             E_E | E_M | E_N0 | E_N1 | E_P0 | E_P1 | E_Z | M_E | N0_E | N1_E | P0_E | P1_E | Z_E
-            | Z_Z => (Self::EMPTY, Decoration::Trv),
-            M_M | M_N0 | N0_M | N0_N0 => (
-                Self::with_infsup_raw(-Self::PI.sup_raw(), Self::PI.sup_raw()),
-                Decoration::Trv,
-            ),
+            | Z_Z => Self::EMPTY,
+            M_M | M_N0 | N0_M | N0_N0 => Self::with_infsup_raw(-Self::PI.sup, Self::PI.sup),
 
             // First quadrant
-            P0_P0 => (
-                Self::with_infsup_raw(0.0, Self::FRAC_PI_2.sup_raw()),
-                Decoration::Trv,
-            ),
-            P0_P1 | P1_P0 | P1_P1 | P1_Z | Z_P1 => (
-                Self::with_infsup_raw(atan2_rd(c, b), atan2_ru(d, a)),
-                Decoration::Com,
-            ),
+            P0_P0 => Self::with_infsup_raw(0.0, Self::FRAC_PI_2.sup),
+            P0_P1 | P1_P0 | P1_P1 | P1_Z | Z_P1 => Self::with_infsup_raw(f64::atan2(c, b), f64::atan2(d, a)),
 
             // First & second quadrant
-            M_P0 | M_Z => (
-                Self::with_infsup_raw(0.0, Self::PI.sup_raw()),
-                Decoration::Trv,
-            ),
-            M_P1 => (
-                Self::with_infsup_raw(atan2_rd(c, b), atan2_ru(c, a)),
-                Decoration::Com,
-            ),
+            M_P0 | M_Z => Self::with_infsup_raw(0.0, Self::PI.sup),
+            M_P1 => Self::with_infsup_raw(f64::atan2(c, b), f64::atan2(c, a)),
 
             // Second quadrant
-            N0_P0 => (
-                Self::with_infsup_raw(Self::FRAC_PI_2.inf_raw(), Self::PI.sup_raw()),
-                Decoration::Trv,
-            ),
-            N0_P1 | N1_P1 => (
-                Self::with_infsup_raw(atan2_rd(d, b), atan2_ru(c, a)),
-                Decoration::Com,
-            ),
-            N1_P0 => (
-                Self::with_infsup_raw(atan2_rd(d, b), Self::PI.sup_raw()),
-                Decoration::Dac,
-            ),
+            N0_P0=> Self::with_infsup_raw(Self::FRAC_PI_2.inf, Self::PI.sup),
+            N0_P1 | N1_P1 => Self::with_infsup_raw(f64::atan2(d, b), f64::atan2(c, a)),
+            N1_P0 => Self::with_infsup_raw(f64::atan2(d, b), Self::PI.sup),
 
             // Second & third quadrant
             //N0_M => See above.
-            N1_M | N1_N0 => (
-                Self::with_infsup_raw(-Self::PI.sup_raw(), Self::PI.sup_raw()),
-                Decoration::Def,
-            ),
+            N1_M | N1_N0 => Self::with_infsup_raw(-Self::PI.sup, Self::PI.sup),
 
             // Third quadrant
             //N0_N0 => See above.
-            N0_N1 | N1_N1 => (
-                Self::with_infsup_raw(atan2_rd(d, a), atan2_ru(c, b)),
-                Decoration::Com,
-            ),
+            N0_N1 | N1_N1 => Self::with_infsup_raw(f64::atan2(d, a), f64::atan2(c, b)),
             //N1_N0 => See above.
 
             // Third & fourth quadrant
             //M_N0 => See above.
-            M_N1 => (
-                Self::with_infsup_raw(atan2_rd(d, a), atan2_ru(d, b)),
-                Decoration::Com,
-            ),
+            M_N1 => Self::with_infsup_raw(f64::atan2(d, a), f64::atan2(d, b)),
 
             // Fourth quadrant
-            P0_N0 => (
-                Self::with_infsup_raw(-Self::FRAC_PI_2.sup_raw(), 0.0),
-                Decoration::Trv,
-            ),
-            P0_N1 | P1_N0 | P1_N1 | Z_N1 => (
-                Self::with_infsup_raw(atan2_rd(c, a), atan2_ru(d, b)),
-                Decoration::Com,
-            ),
+            P0_N0 => Self::with_infsup_raw(-Self::FRAC_PI_2.sup, 0.0),
+            P0_N1 | P1_N0 | P1_N1 | Z_N1 => Self::with_infsup_raw(f64::atan2(c, a), f64::atan2(d, b)),
 
             // Fourth & first quadrant
-            P0_M | Z_M => (
-                Self::with_infsup_raw(-Self::FRAC_PI_2.sup_raw(), Self::FRAC_PI_2.sup_raw()),
-                Decoration::Trv,
-            ),
-            P1_M => (
-                Self::with_infsup_raw(atan2_rd(c, a), atan2_ru(d, a)),
-                Decoration::Com,
-            ),
+            P0_M | Z_M => Self::with_infsup_raw(-Self::FRAC_PI_2.sup, Self::FRAC_PI_2.sup),
+            P1_M => Self::with_infsup_raw(f64::atan2(c, a), f64::atan2(d, a)),
 
             // X axis
             //M_Z => See above.
-            N0_Z => (Self::PI, Decoration::Trv),
+            N0_Z => Self::PI,
             // The next case cannot be merged with N1_P0 unless we replace -0.0 with +0.0
             // since IEEE 754/MPFR's atan2 returns ±π for y = ±0.0, x < 0.0, while we want only +π.
-            N1_Z => (Self::PI, Decoration::Dac),
-            P0_Z => (Self::zero(), Decoration::Trv),
+            N1_Z => Self::PI,
+            P0_Z => Self::zero(),
             //P1_Z => See above.
 
             // Y axis
             //Z_M => See above.
-            Z_N0 => (-Self::FRAC_PI_2, Decoration::Trv),
+            Z_N0 => -Self::FRAC_PI_2,
             //Z_N1 => See above.
-            Z_P0 => (Self::FRAC_PI_2, Decoration::Trv),
+            Z_P0 => Self::FRAC_PI_2,
             //Z_P1 => See above.
         }
     }
@@ -387,30 +208,19 @@ impl Interval {
     /// | $(-1, 1)$ | $\R$  |
     #[must_use]
     pub fn atanh(self) -> Self {
-        self.atanh_impl().0
-    }
-
-    #[allow(clippy::many_single_char_names)]
-    fn atanh_impl(self) -> (Self, Decoration) {
         // Mathematically, the domain of atanh is (-1.0, 1.0), not [-1.0, 1.0].
         // However, IEEE 754/MPFR's atanh returns ±infinity for ±1.0,
         // (and signals the divide-by-zero exception), so we will make use of that.
         const DOM: Interval = const_interval!(-1.0, 1.0);
         let x = self.intersection(DOM);
 
-        let a = x.inf_raw();
-        let b = x.sup_raw();
+        let a = x.inf;
+        let b = x.sup;
         if x.is_empty() || b <= -1.0 || a >= 1.0 {
-            return (Self::EMPTY, Decoration::Trv);
+            return Self::EMPTY;
         }
 
-        let y = Self::with_infsup_raw(atanh_rd(a), atanh_ru(b));
-        let d = if self.interior(DOM) {
-            Decoration::Com
-        } else {
-            Decoration::Trv
-        };
-        (y, d)
+        Self::with_infsup_raw(f64::atanh(a), f64::atanh(b))
     }
 
     /// Returns the cosine of `self`.
@@ -426,11 +236,11 @@ impl Interval {
             return self;
         }
 
-        let a = self.inf_raw();
-        let b = self.sup_raw();
+        let a = self.inf;
+        let b = self.sup;
         let q_nowrap = (self / Self::PI).floor();
-        let qa = q_nowrap.inf_raw();
-        let qb = q_nowrap.sup_raw();
+        let qa = q_nowrap.inf;
+        let qb = q_nowrap.sup;
         // n and q are valid for small values.
         let n = if a == b {
             // For strict test cases on huge values.
@@ -444,18 +254,18 @@ impl Interval {
         if n == 0.0 {
             if q == 0.0 {
                 // monotonically decreasing
-                Self::with_infsup_raw(cos_rd(b), cos_ru(a))
+                Self::with_infsup_raw(f64::cos(b), f64::cos(a))
             } else {
                 // monotonically increasing
-                Self::with_infsup_raw(cos_rd(a), cos_ru(b))
+                Self::with_infsup_raw(f64::cos(a), f64::cos(b))
             }
         } else if n <= 1.0 {
             if q == 0.0 {
                 // decreasing, then increasing
-                Self::with_infsup_raw(-1.0, cos_ru(a).max(cos_ru(b)))
+                Self::with_infsup_raw(-1.0, f64::cos(a).max(f64::cos(b)))
             } else {
                 // increasing, then decreasing
-                Self::with_infsup_raw(cos_rd(a).min(cos_rd(b)), 1.0)
+                Self::with_infsup_raw(f64::cos(a).min(f64::cos(b)), 1.0)
             }
         } else {
             const_interval!(-1.0, 1.0)
@@ -475,14 +285,14 @@ impl Interval {
             return self;
         }
 
-        let a = self.inf_raw();
-        let b = self.sup_raw();
+        let a = self.inf;
+        let b = self.sup;
         if b < 0.0 {
-            Self::with_infsup_raw(cosh_rd(b), cosh_ru(a))
+            Self::with_infsup_raw(f64::cosh(b), f64::cosh(a))
         } else if a > 0.0 {
-            Self::with_infsup_raw(cosh_rd(a), cosh_ru(b))
+            Self::with_infsup_raw(f64::cosh(a), f64::cosh(b))
         } else {
-            Self::with_infsup_raw(1.0, cosh_ru((-a).max(b)))
+            Self::with_infsup_raw(1.0, f64::cosh((-a).max(b)))
         }
     }
 
@@ -495,11 +305,10 @@ impl Interval {
         /// | ------ | -------- |
         /// | $\R$   | $(0, ∞)$ |
         exp,
-        exp_rd,
-        exp_ru
+        f64::exp
     );
-    impl_mono_inc!(
-        /// Returns `self` raised to the power of 10.
+	impl_mono_inc!(
+        /// Returns `self` raised to the power of $\e$.
         ///
         /// The domain and the range of the point function are:
         ///
@@ -507,8 +316,7 @@ impl Interval {
         /// | ------ | -------- |
         /// | $\R$   | $(0, ∞)$ |
         exp10,
-        exp10_rd,
-        exp10_ru
+        libm::exp10
     );
     impl_mono_inc!(
         /// Returns `self` raised to the power of 2.
@@ -519,8 +327,7 @@ impl Interval {
         /// | ------ | -------- |
         /// | $\R$   | $(0, ∞)$ |
         exp2,
-        exp2_rd,
-        exp2_ru
+        f64::exp2
     );
 
     impl_log!(
@@ -532,9 +339,7 @@ impl Interval {
         /// | -------- | ----- |
         /// | $(0, ∞)$ | $\R$  |
         ln,
-        ln_impl,
-        ln_rd,
-        ln_ru
+        f64::ln
     );
     impl_log!(
         /// Returns the base-10 logarithm of `self`.
@@ -545,9 +350,7 @@ impl Interval {
         /// | -------- | ----- |
         /// | $(0, ∞)$ | $\R$  |
         log10,
-        log10_impl,
-        log10_rd,
-        log10_ru
+        libm::log10
     );
     impl_log!(
         /// Returns the base-2 logarithm of `self`.
@@ -558,9 +361,7 @@ impl Interval {
         /// | -------- | ----- |
         /// | $(0, ∞)$ | $\R$  |
         log2,
-        log2_impl,
-        log2_rd,
-        log2_ru
+        f64::log2
     );
 
     /// Returns `self` raised to the power of `rhs`.
@@ -581,71 +382,49 @@ impl Interval {
     /// | $((0, ∞) × \R) ∪ (\set 0 × (0, ∞))$ | $\[0, ∞)$ |
     #[must_use]
     pub fn pow(self, rhs: Self) -> Self {
-        self.pow_impl(rhs).0
-    }
-
-    #[allow(clippy::many_single_char_names)]
-    fn pow_impl(self, rhs: Self) -> (Self, Decoration) {
-        const DOM: Interval = const_interval!(0.0, f64::INFINITY);
+		const DOM: Interval = const_interval!(0.0, f64::INFINITY);
         let x = self.intersection(DOM);
 
         if x.either_empty(rhs) {
-            return (Self::EMPTY, Decoration::Trv);
+            return Self::EMPTY;
         }
 
-        let a = x.inf_raw();
-        let b = x.sup_raw();
-        let c = rhs.inf_raw();
-        let d = rhs.sup_raw();
+        let a = x.inf;
+        let b = x.sup;
+        let c = rhs.inf;
+        let d = rhs.sup;
 
         if d <= 0.0 {
             if b == 0.0 {
-                return (Self::EMPTY, Decoration::Trv);
+                return Self::EMPTY;
             }
 
-            let dec = if self.interior(DOM) {
-                Decoration::Com
-            } else {
-                Decoration::Trv
-            };
-
             if b < 1.0 {
-                (Self::with_infsup_raw(pow_rd(b, d), pow_ru(a, c)), dec)
+                Self::with_infsup_raw(f64::powf(b, d), f64::powf(a, c))
             } else if a > 1.0 {
-                (Self::with_infsup_raw(pow_rd(b, c), pow_ru(a, d)), dec)
+                Self::with_infsup_raw(f64::powf(b, c), f64::powf(a, d))
             } else {
-                (Self::with_infsup_raw(pow_rd(b, c), pow_ru(a, c)), dec)
+                Self::with_infsup_raw(f64::powf(b, c), f64::powf(a, c))
             }
         } else if c > 0.0 {
-            let dec = if self.subset(DOM) {
-                Decoration::Com
-            } else {
-                Decoration::Trv
-            };
-
             if b < 1.0 {
-                (Self::with_infsup_raw(pow_rd(a, d), pow_ru(b, c)), dec)
+                Self::with_infsup_raw(f64::powf(a, d), f64::powf(b, c))
             } else if a > 1.0 {
-                (Self::with_infsup_raw(pow_rd(a, c), pow_ru(b, d)), dec)
+                Self::with_infsup_raw(f64::powf(a, c), f64::powf(b, d))
             } else {
-                (Self::with_infsup_raw(pow_rd(a, d), pow_ru(b, d)), dec)
+                Self::with_infsup_raw(f64::powf(a, d), f64::powf(b, d))
             }
         } else {
             if b == 0.0 {
-                return (Self::zero(), Decoration::Trv);
+                return Self::zero();
             }
 
-            let z_ac = pow_ru(a, c);
-            let z_ad = pow_rd(a, d);
-            let z_bc = pow_rd(b, c);
-            let z_bd = pow_ru(b, d);
-            let dec = if self.interior(DOM) {
-                Decoration::Com
-            } else {
-                Decoration::Trv
-            };
+            let z_ac = f64::powf(a, c);
+            let z_ad = f64::powf(a, d);
+            let z_bc = f64::powf(b, c);
+            let z_bd = f64::powf(b, d);
 
-            (Self::with_infsup_raw(z_ad.min(z_bc), z_ac.max(z_bd)), dec)
+            Self::with_infsup_raw(z_ad.min(z_bc), z_ac.max(z_bd))
         }
     }
 
@@ -672,38 +451,25 @@ impl Interval {
     /// | $n < 0$, even  | $\R ∖ \set 0$ | $(0, ∞)$      |
     #[must_use]
     pub fn powi(self, rhs: i32) -> Self {
-        self.powi_impl(rhs).0
-    }
-
-    fn powi_impl(self, rhs: i32) -> (Self, Decoration) {
         if self.is_empty() {
-            return (self, Decoration::Trv);
+            return self;
         }
 
-        let mut a = self.inf_raw();
-        let mut b = self.sup_raw();
+        let mut a = self.inf;
+        let mut b = self.sup;
 
         #[allow(clippy::collapsible_else_if, clippy::collapsible_if)]
         if rhs < 0 {
-            let d = if a <= 0.0 && b >= 0.0 {
-                Decoration::Trv
-            } else {
-                Decoration::Com
-            };
-
-            if a == 0.0 && b == 0.0 {
-                return (Self::EMPTY, d);
+			if a == 0.0 && b == 0.0 {
+                return Self::EMPTY;
             }
 
             if rhs % 2 == 0 {
                 let abs = self.abs();
-                (
-                    Self::with_infsup_raw(pown_rd(abs.sup_raw(), rhs), pown_ru(abs.inf_raw(), rhs)),
-                    d,
-                )
+				Self::with_infsup_raw(f64::powi(abs.sup, rhs), f64::powi(abs.inf, rhs))
             } else {
                 if a < 0.0 && b > 0.0 {
-                    (Self::ENTIRE, d)
+                    Self::ENTIRE
                 } else {
                     if a == 0.0 {
                         a = 0.0; // [0, b]
@@ -711,21 +477,15 @@ impl Interval {
                     if b == 0.0 {
                         b = -0.0; // [a, 0]
                     }
-                    (Self::with_infsup_raw(pown_rd(b, rhs), pown_ru(a, rhs)), d)
+                    Self::with_infsup_raw(f64::powi(b, rhs), f64::powi(a, rhs))
                 }
             }
         } else {
             if rhs % 2 == 0 {
                 let abs = self.abs();
-                (
-                    Self::with_infsup_raw(pown_rd(abs.inf_raw(), rhs), pown_ru(abs.sup_raw(), rhs)),
-                    Decoration::Com,
-                )
+				Self::with_infsup_raw(f64::powi(abs.inf, rhs), f64::powi(abs.sup, rhs))
             } else {
-                (
-                    Self::with_infsup_raw(pown_rd(a, rhs), pown_ru(b, rhs)),
-                    Decoration::Com,
-                )
+				Self::with_infsup_raw(f64::powi(a, rhs), f64::powi(b, rhs))
             }
         }
     }
@@ -743,26 +503,26 @@ impl Interval {
             return self;
         }
 
-        let a = self.inf_raw();
-        let b = self.sup_raw();
+        let a = self.inf;
+        let b = self.sup;
         let q_nowrap = (self / Self::FRAC_PI_2).floor();
-        let qa = q_nowrap.inf_raw();
-        let qb = q_nowrap.sup_raw();
+        let qa = q_nowrap.inf;
+        let qb = q_nowrap.sup;
         let n = if a == b { 0.0 } else { qb - qa };
         let q = qa.rem_euclid(4.0);
 
         if q == 0.0 && n < 1.0 || q == 3.0 && n < 2.0 {
             // monotonically increasing
-            Self::with_infsup_raw(sin_rd(a), sin_ru(b))
+            Self::with_infsup_raw(f64::sin(a), f64::sin(b))
         } else if q == 1.0 && n < 2.0 || q == 2.0 && n < 1.0 {
             // monotonically decreasing
-            Self::with_infsup_raw(sin_rd(b), sin_ru(a))
+            Self::with_infsup_raw(f64::sin(b), f64::sin(a))
         } else if q == 0.0 && n < 3.0 || q == 3.0 && n < 4.0 {
             // increasing, then decreasing
-            Self::with_infsup_raw(sin_rd(a).min(sin_rd(b)), 1.0)
+            Self::with_infsup_raw(f64::sin(a).min(f64::sin(b)), 1.0)
         } else if q == 1.0 && n < 4.0 || q == 2.0 && n < 3.0 {
             // decreasing, then increasing
-            Self::with_infsup_raw(-1.0, sin_ru(a).max(sin_ru(b)))
+            Self::with_infsup_raw(-1.0, f64::sin(a).max(f64::sin(b)))
         } else {
             const_interval!(-1.0, 1.0)
         }
@@ -777,8 +537,7 @@ impl Interval {
         /// | ------ | ----- |
         /// | $\R$   | $\R$  |
         sinh,
-        sinh_rd,
-        sinh_ru
+        f64::sinh
     );
 
     /// Returns the tangent of `self`.
@@ -790,29 +549,25 @@ impl Interval {
     /// | $\R ∖ \set{(n + 1/2) π ∣ n ∈ \Z}$ | $\R$  |
     #[must_use]
     pub fn tan(self) -> Self {
-        self.tan_impl().0
-    }
-
-    fn tan_impl(self) -> (Self, Decoration) {
         if self.is_empty() {
-            return (self, Decoration::Trv);
+            return self;
         }
 
-        let a = self.inf_raw();
-        let b = self.sup_raw();
+        let a = self.inf;
+        let b = self.sup;
         let q_nowrap = (self / Self::FRAC_PI_2).floor();
-        let qa = q_nowrap.inf_raw();
-        let qb = q_nowrap.sup_raw();
+        let qa = q_nowrap.inf;
+        let qb = q_nowrap.sup;
         let n = if a == b { 0.0 } else { qb - qa };
         let q = rem_euclid_2(qa);
 
         let cont =
-            qb != f64::INFINITY && b <= (Self::with_infsup_raw(qb, qb) * Self::FRAC_PI_2).inf_raw();
+            qb != f64::INFINITY && b <= (Self::with_infsup_raw(qb, qb) * Self::FRAC_PI_2).inf;
         if q == 0.0 && (n < 1.0 || n == 1.0 && cont) || q == 1.0 && (n < 2.0 || n == 2.0 && cont) {
             // In case of overflow, the decoration must be corrected by the caller.
-            (Self::with_infsup_raw(tan_rd(a), tan_ru(b)), Decoration::Com)
+            Self::with_infsup_raw(f64::tan(a), f64::tan(b))
         } else {
-            (Self::ENTIRE, Decoration::Trv)
+            Self::ENTIRE
         }
     }
 
@@ -825,134 +580,37 @@ impl Interval {
         /// | ------ | --------- |
         /// | $\R$   | $(-1, 1)$ |
         tanh,
-        tanh_rd,
-        tanh_ru
+        f64::tanh
     );
 }
 
-macro_rules! impl_dec {
-    ($f:ident) => {
-        #[doc = concat!("The decorated version of [`Interval::", stringify!($f), "`].")]
-        ///
-        /// A NaI is returned if `self` is NaI.
-        #[must_use]
-        pub fn $f(self) -> Self {
-            Self::set_dec(self.x.$f(), self.d)
-        }
-    };
-
-    ($f:ident, $f_impl:ident) => {
-        #[doc = concat!("The decorated version of [`Interval::", stringify!($f), "`].")]
-        ///
-        /// A NaI is returned if `self` is NaI.
-        #[must_use]
-        pub fn $f(self) -> Self {
-            let (y, d) = self.x.$f_impl();
-            Self::set_dec(y, self.d.min(d))
-        }
-    };
-}
-
-macro_rules! impl_dec2 {
-    ($f:ident, $f_impl:ident) => {
-        #[doc = concat!("The decorated version of [`Interval::", stringify!($f), "`].")]
-        ///
-        /// A NaI is returned if `self` or `rhs` is NaI.
-        #[must_use]
-        pub fn $f(self, rhs: Self) -> Self {
-            let (z, d) = self.x.$f_impl(rhs.x);
-            Self::set_dec(z, self.d.min(rhs.d.min(d)))
-        }
-    };
-}
-
-impl DecInterval {
-    impl_dec!(acos, acos_impl);
-    impl_dec!(acosh, acosh_impl);
-    impl_dec!(asin, asin_impl);
-    impl_dec!(asinh);
-    impl_dec!(atan);
-    impl_dec2!(atan2, atan2_impl);
-    impl_dec!(atanh, atanh_impl);
-    impl_dec!(cos);
-    impl_dec!(cosh);
-    impl_dec!(exp);
-    impl_dec!(exp10);
-    impl_dec!(exp2);
-    impl_dec!(ln, ln_impl);
-    impl_dec!(log10, log10_impl);
-    impl_dec!(log2, log2_impl);
-    impl_dec2!(pow, pow_impl);
-
-    /// The decorated version of [`Interval::powi`].
-    ///
-    /// A NaI is returned if `self` is NaI.
-    #[must_use]
-    pub fn powi(self, rhs: i32) -> Self {
-        let (y, d) = self.x.powi_impl(rhs);
-        Self::set_dec(y, self.d.min(d))
-    }
-
-    impl_dec!(sin);
-    impl_dec!(sinh);
-    impl_dec!(tan, tan_impl);
-    impl_dec!(tanh);
-}
 
 #[cfg(test)]
 mod tests {
     use crate::*;
-    use DecInterval as DI;
     use Interval as I;
-
-    #[test]
-    fn nai() {
-        assert!(DI::NAI.acos().is_nai());
-        assert!(DI::NAI.acosh().is_nai());
-        assert!(DI::NAI.asin().is_nai());
-        assert!(DI::NAI.asinh().is_nai());
-        assert!(DI::NAI.atan().is_nai());
-        assert!(DI::NAI.atan2(DI::EMPTY).is_nai());
-        assert!(DI::EMPTY.atan2(DI::NAI).is_nai());
-        assert!(DI::NAI.atanh().is_nai());
-        assert!(DI::NAI.cos().is_nai());
-        assert!(DI::NAI.cosh().is_nai());
-        assert!(DI::NAI.exp().is_nai());
-        assert!(DI::NAI.exp10().is_nai());
-        assert!(DI::NAI.exp2().is_nai());
-        assert!(DI::NAI.ln().is_nai());
-        assert!(DI::NAI.log10().is_nai());
-        assert!(DI::NAI.log2().is_nai());
-        assert!(DI::NAI.pow(DI::EMPTY).is_nai());
-        assert!(DI::EMPTY.pow(DI::NAI).is_nai());
-        assert!(DI::NAI.powi(1).is_nai());
-        assert!(DI::NAI.sin().is_nai());
-        assert!(DI::NAI.sinh().is_nai());
-        assert!(DI::NAI.tan().is_nai());
-        assert!(DI::NAI.tanh().is_nai());
-    }
 
     #[test]
     fn tan() {
         // a, b ∈ (-π/2, π/2)
-        assert!(interval!(std::f64::consts::FRAC_PI_4, I::FRAC_PI_2.inf())
+        assert!(interval!(std::f64::consts::FRAC_PI_4, I::FRAC_PI_2.inf)
             .unwrap()
             .tan()
             .is_common_interval());
-        assert!(interval!(-std::f64::consts::FRAC_PI_4, I::FRAC_PI_2.inf())
+        assert!(interval!(-std::f64::consts::FRAC_PI_4, I::FRAC_PI_2.inf)
             .unwrap()
             .tan()
             .is_common_interval());
 
         // a, b ∈ (-3π/2, -π/2)
         assert!(
-            interval!(-3.0 * std::f64::consts::FRAC_PI_4, -I::FRAC_PI_2.sup())
+            interval!(-3.0 * std::f64::consts::FRAC_PI_4, -I::FRAC_PI_2.sup)
                 .unwrap()
                 .tan()
                 .is_common_interval()
         );
         assert!(
-            interval!(-5.0 * std::f64::consts::FRAC_PI_4, -I::FRAC_PI_2.sup())
+            interval!(-5.0 * std::f64::consts::FRAC_PI_4, -I::FRAC_PI_2.sup)
                 .unwrap()
                 .tan()
                 .is_common_interval()

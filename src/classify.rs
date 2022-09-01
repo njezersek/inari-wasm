@@ -1,11 +1,19 @@
-use crate::{interval::Interval, simd::*};
+use crate::interval::*;
 use std::mem::transmute;
 
 impl Interval {
     pub(crate) fn classify(self) -> IntervalClass {
-        let zero = splat(0.0);
-        let ge_zero = bitmask(ge(self.rep, zero)) as u8;
-        let le_zero = bitmask(le(self.rep, zero)) as u8;
+
+        // let ge_zero = bitmask(ge(self.rep, zero)) as u8;
+		let inf_ge_zero = (-self.inf >= 0.0) as u8;
+		let sup_ge_zero = (self.sup >= 0.0) as u8;
+        let ge_zero = sup_ge_zero << 1 | inf_ge_zero;
+
+		// let le_zero = bitmask(le(self.rep, zero)) as u8;
+		let inf_le_zero = (-self.inf <= 0.0) as u8;
+		let sup_le_zero = (self.sup <= 0.0) as u8;
+		let le_zero = sup_le_zero << 1 | inf_le_zero;
+
         unsafe { transmute((le_zero << 2) | ge_zero) }
     }
 
@@ -109,6 +117,7 @@ pub(crate) enum IntervalClass2 {
     Z_P1 = discr!(Z, P1),
     Z_Z = discr!(Z, Z),
 }
+
 
 #[cfg(test)]
 mod tests {

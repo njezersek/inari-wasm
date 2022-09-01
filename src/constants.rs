@@ -1,11 +1,10 @@
 #![allow(clippy::approx_constant)]
 
 use crate::{const_interval, interval::*};
-use std::mem::transmute;
 
 impl Interval {
     /// $∅$, the empty set.
-    pub const EMPTY: Self = unsafe { transmute([f64::NAN, f64::NAN]) };
+    pub const EMPTY: Self = Interval{inf: f64::NAN, sup: f64::NAN};
 
     /// $\[-∞, +∞\]$.
     pub const ENTIRE: Self = const_interval!(f64::NEG_INFINITY, f64::INFINITY);
@@ -66,92 +65,4 @@ impl Interval {
 
     /// The tightest interval enclosing $2 π$.
     pub const TAU: Self = const_interval!(6.283185307179586, 6.283185307179587);
-}
-
-macro_rules! def_com {
-    ($c:ident) => {
-        #[doc = concat!("[`Interval::", stringify!($c), "`] decorated with [`Decoration::Com`].")]
-        pub const $c: Self = Self::new_unchecked(Interval::$c, Decoration::Com);
-    };
-}
-
-impl DecInterval {
-    /// $∅$, the empty set, decorated with [`Decoration::Trv`].
-    pub const EMPTY: Self = Self::new_unchecked(Interval::EMPTY, Decoration::Trv);
-
-    /// $\[-∞, +∞\]$ decorated with [`Decoration::Dac`].
-    pub const ENTIRE: Self = Self::new_unchecked(Interval::ENTIRE, Decoration::Dac);
-
-    /// A NaI (Not an Interval).
-    pub const NAI: Self = Self::new_unchecked(Interval::EMPTY, Decoration::Ill);
-
-    def_com!(E);
-    def_com!(FRAC_1_PI);
-    def_com!(FRAC_1_SQRT_2);
-    def_com!(FRAC_2_PI);
-    def_com!(FRAC_2_SQRT_PI);
-    def_com!(FRAC_PI_2);
-    def_com!(FRAC_PI_3);
-    def_com!(FRAC_PI_4);
-    def_com!(FRAC_PI_6);
-    def_com!(FRAC_PI_8);
-    def_com!(LN_10);
-    def_com!(LN_2);
-    def_com!(LOG10_2);
-    def_com!(LOG10_E);
-    def_com!(LOG2_10);
-    def_com!(LOG2_E);
-    def_com!(PI);
-    def_com!(SQRT_2);
-    def_com!(TAU);
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::*;
-    use DecInterval as DI;
-    use Interval as I;
-
-    // This only works with positive numbers.
-    fn succ(x: f64) -> f64 {
-        f64::from_bits(x.to_bits() + 1)
-    }
-
-    macro_rules! check {
-        ($c:ident) => {
-            check!($c, std::f64::consts::$c);
-        };
-
-        ($c:ident, $f:expr) => {
-            assert!({
-                let a = I::$c.inf();
-                let b = I::$c.sup();
-                b == succ(a) && (a == $f || $f == b)
-            });
-            assert_eq!(DI::$c, DI::new(I::$c));
-        };
-    }
-
-    #[test]
-    fn constants() {
-        check!(E);
-        check!(FRAC_1_PI);
-        check!(FRAC_1_SQRT_2);
-        check!(FRAC_2_PI);
-        check!(FRAC_2_SQRT_PI);
-        check!(FRAC_PI_2);
-        check!(FRAC_PI_3);
-        check!(FRAC_PI_4);
-        check!(FRAC_PI_6);
-        check!(FRAC_PI_8);
-        check!(LN_10);
-        check!(LN_2);
-        check!(LOG10_2);
-        check!(LOG10_E);
-        check!(LOG2_10);
-        check!(LOG2_E);
-        check!(PI);
-        check!(SQRT_2);
-        check!(TAU);
-    }
 }
