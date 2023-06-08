@@ -12,7 +12,8 @@ macro_rules! impl_log {
     ($(#[$meta:meta])* $f:ident, $f_real:expr) => {
         $(#[$meta])*
         #[allow(dead_code)]
-        fn $f(self) -> Self {
+        #[must_use]
+        pub fn $f(self) -> Self {
             // See the comment in atanh_impl.
             const DOM: Interval = const_interval!(0.0, f64::INFINITY);
             let x = self.intersection(DOM);
