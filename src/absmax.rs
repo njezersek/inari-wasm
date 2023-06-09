@@ -39,7 +39,7 @@ impl Interval {
 			return Self::EMPTY;
 		}
 
-		Self { inf: f64::min(self.sup, rhs.sup), sup: f64::max(self.sup, rhs.sup) }
+		Self { inf: f64::max(self.inf, rhs.inf), sup: f64::max(self.sup, rhs.sup) }
     }
 
     /// Returns the minimum of `self` and `rhs`.
@@ -55,7 +55,7 @@ impl Interval {
 			return Self::EMPTY;
 		}
 
-		Self { inf: f64::min(self.inf, rhs.inf), sup: f64::max(self.inf, rhs.inf) }
+		Self { inf: f64::min(self.inf, rhs.inf), sup: f64::min(self.sup, rhs.sup) }
     }
 }
 
