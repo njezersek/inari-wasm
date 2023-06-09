@@ -1,6 +1,6 @@
 [package]
 name = "inari_wasm"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Masashi Mizuno", "Nejc Jezersek"]
 edition = "2021"
 description = "A stripped-down version of Inari library (a Rust implementation of interval arithmetic) compatible with web assembly"
